@@ -1,0 +1,614 @@
+const state = {
+  step: 0,
+  provider: 'deepseek',
+  apiKey: '',
+  baseUrl: '',
+  model: '',
+  authCode: '',
+  accessToken: '',
+  csrf: '',
+  mid: '',
+  cookie: '',
+  categories: [],
+  selectedCategories: [],
+  captchaToken: '',
+  questionNum: 0,
+  score: 0,
+  totalAnswered: 0,
+  correctCount: 0,
+  isRunning: false,
+};
+
+function goBack(step) {
+  state.isRunning = false;
+  setStep(step);
+  if (step === 2) loadCategories();
+}
+
+function goToStep(step) {
+  state.isRunning = false;
+  setStep(step);
+  if (step === 1) initLoginStep();
+  if (step === 2) loadCategories();
+}
+
+function setStep(n) {
+  document.querySelectorAll('.step').forEach((el, i) => {
+    el.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.nav-step').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    if (i === n) el.classList.add('active');
+  });
+  [0,1,2,3,4].forEach(i => clearToast(i));
+  state.step = n;
+}
+
+function onProviderChange() {
+  const p = document.getElementById('provider').value;
+  state.provider = p;
+  document.getElementById('baseUrlGroup').style.display = p === 'openai' ? 'block' : 'none';
+  document.getElementById('modelSelectGroup').style.display = p === 'deepseek' ? 'block' : 'none';
+  document.getElementById('modelGroup').style.display = p !== 'deepseek' ? 'block' : 'none';
+}
+
+function saveConfig() {
+  state.provider = document.getElementById('provider').value;
+  state.apiKey = document.getElementById('apiKey').value.trim();
+  state.baseUrl = document.getElementById('baseUrl').value.trim();
+  state.model = state.provider === 'deepseek'
+    ? document.getElementById('modelSelect').value
+    : document.getElementById('modelName').value.trim();
+
+  if (!state.apiKey) {
+    showToast(0, '请输入 API Key');
+    return;
+  }
+
+  localStorage.setItem('bili_hc_config', JSON.stringify({
+    provider: state.provider,
+    apiKey: state.apiKey,
+    baseUrl: state.baseUrl,
+    model: state.model,
+  }));
+
+  setStep(1);
+  initLoginStep();
+}
+
+async function initLoginStep() {
+  document.getElementById('loginLog').innerHTML = '';
+  if (loadSavedAuth()) {
+    document.getElementById('qrView').style.display = 'none';
+    document.getElementById('loggedInView').style.display = 'block';
+    document.getElementById('loggedUserInfo').textContent = 'MID: ' + state.mid;
+  } else {
+    document.getElementById('qrView').style.display = 'block';
+    document.getElementById('loggedInView').style.display = 'none';
+    initLogin();
+  }
+}
+
+function reLogin() {
+  localStorage.removeItem('bili_hc_auth');
+  state.accessToken = '';
+  state.csrf = '';
+  state.mid = '';
+  state.cookie = '';
+  document.getElementById('qrView').style.display = 'block';
+  document.getElementById('loggedInView').style.display = 'none';
+  initLogin();
+}
+
+function loadConfig() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('bili_hc_config') || '{}');
+    if (saved.provider) {
+      document.getElementById('provider').value = saved.provider;
+      state.provider = saved.provider;
+    }
+    if (saved.apiKey) {
+      document.getElementById('apiKey').value = saved.apiKey;
+      state.apiKey = saved.apiKey;
+    }
+    if (saved.baseUrl) {
+      document.getElementById('baseUrl').value = saved.baseUrl;
+      state.baseUrl = saved.baseUrl;
+    }
+    if (saved.model) {
+      state.model = saved.model;
+      if (saved.provider === 'deepseek') {
+        const sel = document.getElementById('modelSelect');
+        if ([...sel.options].some(o => o.value === saved.model)) sel.value = saved.model;
+      } else {
+        document.getElementById('modelName').value = saved.model;
+      }
+    }
+    onProviderChange();
+  } catch(e) {}
+}
+
+function showToast(stepNum, msg) {
+  const el = document.getElementById('toast' + stepNum);
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function clearToast(stepNum) {
+  const el = document.getElementById('toast' + stepNum);
+  if (el) el.style.display = 'none';
+}
+
+function addLog(areaId, msg, type = 'info') {
+  const area = document.getElementById(areaId);
+  const span = document.createElement('span');
+  span.className = `log-${type}`;
+  span.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  area.appendChild(span);
+  area.appendChild(document.createElement('br'));
+  area.scrollTop = area.scrollHeight;
+}
+
+async function apiCall(url, body = {}) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return resp.json();
+}
+
+async function initLogin() {
+  addLog('loginLog', '正在获取登录二维码...', 'info');
+  const resp = await apiCall('/api/login/qrcode');
+  if (resp.code !== 0) {
+    addLog('loginLog', '获取二维码失败: ' + JSON.stringify(resp), 'error');
+    return;
+  }
+  state.authCode = resp.data.auth_code;
+  const url = resp.data.url;
+
+  document.getElementById('qrArea').innerHTML = '<div id="qrBox"></div><div class="hint">请使用哔哩哔哩 APP 扫描二维码登录</div>';
+  const qr = qrcode(0, 'M');
+  qr.addData(url);
+  qr.make();
+  document.getElementById('qrBox').innerHTML = qr.createSvgTag(5, 0);
+
+  addLog('loginLog', '二维码已生成，请扫码登录', 'success');
+  pollLogin();
+}
+
+async function pollLogin() {
+  let retries = 0;
+  const maxRetries = 120;
+
+  while (retries < maxRetries) {
+    try {
+      const resp = await apiCall('/api/login/poll', { auth_code: state.authCode });
+      if (resp.code === 0) {
+        const data = resp.data;
+        state.accessToken = data.access_token;
+        state.mid = String(data.mid);
+        const cookies = data.cookie_info.cookies;
+        for (const c of cookies) {
+          if (c.name === 'bili_jct') state.csrf = c.value;
+        }
+        state.cookie = cookies.map(c => `${c.name}=${c.value}`).join(';');
+
+        localStorage.setItem('bili_hc_auth', JSON.stringify({
+          accessToken: state.accessToken,
+          csrf: state.csrf,
+          mid: state.mid,
+          cookie: state.cookie,
+          savedAt: Date.now(),
+        }));
+
+        addLog('loginLog', '登录成功！用户 MID: ' + state.mid, 'success');
+
+        const userInfo = await apiCall('/api/user/info', { access_key: state.accessToken });
+        if (userInfo.code === 0 && userInfo.data.level < 6) {
+          addLog('loginLog', '警告：当前用户未满6级，可能无法参与答题', 'warn');
+        } else if (userInfo.code === 0) {
+          addLog('loginLog', `用户等级: Lv.${userInfo.data.level}`, 'success');
+        }
+
+        setTimeout(() => enterOrResume(), 800);
+        return;
+      }
+    } catch (e) {
+      addLog('loginLog', '轮询出错: ' + e.message, 'error');
+    }
+    await new Promise(r => setTimeout(r, 2000));
+    retries++;
+  }
+
+  addLog('loginLog', '二维码已过期', 'error');
+  document.getElementById('refreshBtn').style.display = 'inline-block';
+}
+
+function refreshQR() {
+  document.getElementById('refreshBtn').style.display = 'none';
+  document.getElementById('loginLog').innerHTML = '';
+  initLogin();
+}
+
+async function checkQuizInProgress() {
+  try {
+    const resp = await apiCall('/api/quiz/question', {
+      access_key: state.accessToken,
+      csrf: state.csrf,
+    });
+    if (resp.code === 0 && resp.data && resp.data.question) {
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+async function enterOrResume() {
+  if (await checkQuizInProgress()) {
+    startQuiz();
+  } else {
+    setStep(2);
+    loadCategories();
+  }
+}
+
+async function loadCategories() {
+  try {
+    const resp = await apiCall('/api/quiz/categories', {
+      access_key: state.accessToken,
+      csrf: state.csrf,
+    });
+    if (resp.code === 0) {
+      state.categories = resp.data.categories || [];
+      renderCategories();
+    } else if (resp.code === 41099) {
+      showToast(2, '获取分类失败：可能已达到每日答题限制（B站每日限3次），请前往B站APP确认');
+    } else {
+      showToast(2, '获取分类失败: ' + JSON.stringify(resp));
+    }
+  } catch (e) {
+    showToast(2, '获取分类失败: ' + e.message);
+  }
+}
+
+function renderCategories() {
+  const list = document.getElementById('categoryList');
+  list.innerHTML = '';
+  state.categories.forEach(cat => {
+    const div = document.createElement('div');
+    div.className = 'category-item';
+    div.textContent = cat.name;
+    div.dataset.id = cat.id;
+    div.onclick = () => {
+      const ids = [];
+      list.querySelectorAll('.selected').forEach(el => ids.push(el.dataset.id));
+      if (div.classList.contains('selected')) {
+        div.classList.remove('selected');
+        ids.splice(ids.indexOf(div.dataset.id), 1);
+      } else {
+        if (ids.length >= 3) {
+          showToast(2, '最多只能选择3个分类');
+          return;
+        }
+        div.classList.add('selected');
+        ids.push(div.dataset.id);
+      }
+      state.selectedCategories = ids;
+      document.getElementById('startQuizBtn').disabled = ids.length === 0;
+    };
+    list.appendChild(div);
+  });
+}
+
+async function submitCaptcha() {
+  if (state.selectedCategories.length === 0) {
+    showToast(2, '请选择至少一个分类');
+    return;
+  }
+
+  if (!document.getElementById('captchaArea').style.display || document.getElementById('captchaArea').style.display === 'none') {
+    const testResp = await apiCall('/api/quiz/question', {
+      access_key: state.accessToken,
+      csrf: state.csrf,
+    });
+
+    if (testResp.code === 0) {
+      startQuiz();
+      return;
+    }
+
+    const captchaResp = await apiCall('/api/quiz/captcha', {
+      access_key: state.accessToken,
+      csrf: state.csrf,
+    });
+
+    if (captchaResp.code === 0) {
+      state.captchaToken = captchaResp.data.token;
+      document.getElementById('captchaImg').src = captchaResp.data.url;
+      document.getElementById('captchaArea').style.display = 'block';
+      document.getElementById('startQuizBtn').textContent = '提交验证码并开始答题';
+      return;
+    } else {
+      showToast(2, '获取验证码失败: ' + JSON.stringify(captchaResp));
+      return;
+    }
+  }
+
+  const code = document.getElementById('captchaInput').value.trim();
+  if (!code) {
+    showToast(2, '请输入验证码');
+    return;
+  }
+
+  const resp = await apiCall('/api/quiz/captcha/submit', {
+    access_key: state.accessToken,
+    csrf: state.csrf,
+    code: code,
+    captcha_token: state.captchaToken,
+    ids: state.selectedCategories.join(','),
+  });
+
+  if (resp.code === 0) {
+    startQuiz();
+  } else {
+    showToast(2, '验证码提交失败: ' + JSON.stringify(resp));
+  }
+}
+
+async function startQuiz() {
+  setStep(3);
+  state.questionNum = 0;
+  state.score = 0;
+  state.totalAnswered = 0;
+  state.correctCount = 0;
+  state.isRunning = false;
+
+  document.getElementById('quizReady').style.display = 'block';
+  document.getElementById('quizRunning').style.display = 'none';
+  document.getElementById('quizTitle').textContent = '准备答题';
+  document.getElementById('quizStatus').textContent = '';
+  document.getElementById('quizArea').innerHTML = '';
+  document.getElementById('quizLog').innerHTML = '';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('statTotal').textContent = '0';
+  document.getElementById('statCorrect').textContent = '0';
+  document.getElementById('statAccuracy').textContent = '0%';
+}
+
+async function beginQuiz() {
+  document.getElementById('quizReady').style.display = 'none';
+  document.getElementById('quizRunning').style.display = 'block';
+  document.getElementById('quizTitle').textContent = '答题中';
+  state.isRunning = true;
+
+  addLog('quizLog', '开始答题！', 'success');
+  await runQuiz();
+}
+
+async function runQuiz() {
+  while (state.questionNum < 100 && state.isRunning) {
+    try {
+      const qResp = await apiCall('/api/quiz/question', {
+        access_key: state.accessToken,
+        csrf: state.csrf,
+      });
+
+      if (qResp.code !== 0) {
+        addLog('quizLog', '获取题目失败: ' + JSON.stringify(qResp), 'error');
+        if (qResp.code === 41099) {
+          addLog('quizLog', '已达到每日答题限制', 'error');
+        }
+        break;
+      }
+
+      const data = qResp.data;
+      state.questionNum = data.question_num;
+      const question = data.question;
+      const answers = data.answers;
+      const qId = data.id;
+
+      addLog('quizLog', `第${state.questionNum}题: ${question.substring(0, 60)}...`, 'info');
+
+      let aiAnswer = '';
+      let retries = 0;
+      const maxRetries = 3;
+
+      while (retries < maxRetries) {
+        try {
+          const questionStr = `题目: ${question}\n选项: ${JSON.stringify(answers.map((a, i) => `${i+1}. ${a.ans_text}`))}`;
+          const llmResp = await apiCall('/api/llm/ask', {
+            provider: state.provider,
+            apiKey: state.apiKey,
+            baseUrl: state.baseUrl,
+            model: state.model,
+            question: questionStr,
+          });
+          if (llmResp.error) {
+            throw new Error(llmResp.error);
+          }
+          aiAnswer = llmResp.answer;
+          break;
+        } catch (e) {
+          retries++;
+          addLog('quizLog', `AI 回答失败，重试 ${retries}/${maxRetries}: ${e.message}`, 'warn');
+          await new Promise(r => setTimeout(r, 2000 * retries));
+        }
+      }
+
+      if (!aiAnswer) {
+        addLog('quizLog', 'AI 无法回答此题，请检查 API 配置后刷新页面重试', 'error');
+        state.isRunning = false;
+        break;
+      }
+
+      let answerIdx = parseAnswer(aiAnswer, answers.length);
+      if (answerIdx === null) {
+        addLog('quizLog', `AI 回复了无法解析的内容: ${aiAnswer}，重试...`, 'warn');
+        continue;
+      }
+
+      const selectedAnswer = answers[answerIdx - 1];
+      addLog('quizLog', `AI 选择: ${answerIdx}. ${selectedAnswer.ans_text}`, 'info');
+
+      const submitResp = await apiCall('/api/quiz/answer', {
+        access_key: state.accessToken,
+        csrf: state.csrf,
+        id: qId,
+        ans_hash: selectedAnswer.ans_hash,
+        ans_text: selectedAnswer.ans_text,
+      });
+
+      if (submitResp.code !== 0) {
+        addLog('quizLog', '提交答案失败: ' + JSON.stringify(submitResp), 'error');
+        if (submitResp.code === 41103) {
+          addLog('quizLog', '可能已经是硬核会员了，或答题已结束', 'error');
+        }
+        break;
+      }
+
+      const resultResp = await apiCall('/api/quiz/result', {
+        access_key: state.accessToken,
+        csrf: state.csrf,
+      });
+
+      let isCorrect = false;
+      if (resultResp.code === 0) {
+        const newScore = resultResp.data.score;
+        isCorrect = newScore > state.score;
+        state.score = newScore;
+      }
+
+      state.totalAnswered++;
+      if (isCorrect) state.correctCount++;
+
+      updateQuizUI(question, selectedAnswer.ans_text, answerIdx, isCorrect);
+
+      await new Promise(r => setTimeout(r, 500));
+
+    } catch (e) {
+      addLog('quizLog', '答题过程出错: ' + e.message, 'error');
+      await new Promise(r => setTimeout(r, 3000));
+    }
+  }
+
+  state.isRunning = false;
+  addLog('quizLog', '答题结束！', 'success');
+  await showResult();
+}
+
+function parseAnswer(text, maxOptions) {
+  const num = parseInt(text);
+  if (!isNaN(num) && num >= 1 && num <= maxOptions) return num;
+
+  const match = text.match(/回答[:：]\s*(\d+)/);
+  if (match) {
+    const n = parseInt(match[1]);
+    if (n >= 1 && n <= maxOptions) return n;
+  }
+
+  const anyNum = text.match(/\d+/);
+  if (anyNum) {
+    const n = parseInt(anyNum[0]);
+    if (n >= 1 && n <= maxOptions) return n;
+  }
+
+  return null;
+}
+
+function updateQuizUI(question, answerText, answerIdx, isCorrect) {
+  const area = document.getElementById('quizArea');
+  const card = document.createElement('div');
+  card.className = `question-card ${isCorrect ? 'correct' : 'wrong'}`;
+  card.innerHTML = `
+    <div class="question-num">第 ${state.questionNum} 题</div>
+    <div class="question-text">${escapeHtml(question)}</div>
+    <div class="question-answer">
+      <span class="ai">AI选择: ${answerIdx}. ${escapeHtml(answerText)}</span>
+      <span class="result">${isCorrect ? '✓ 正确' : '✗ 错误'}</span>
+    </div>
+  `;
+  area.appendChild(card);
+  area.scrollTop = area.scrollHeight;
+
+  document.getElementById('statTotal').textContent = state.totalAnswered;
+  document.getElementById('statCorrect').textContent = state.correctCount;
+  const accuracy = state.totalAnswered > 0 ? Math.round(state.correctCount / state.totalAnswered * 100) : 0;
+  document.getElementById('statAccuracy').textContent = accuracy + '%';
+  document.getElementById('progressBar').style.width = (state.questionNum) + '%';
+  document.getElementById('quizStatus').textContent = `${state.questionNum}/100`;
+}
+
+async function showResult() {
+  setStep(4);
+
+  const resultResp = await apiCall('/api/quiz/result', {
+    access_key: state.accessToken,
+    csrf: state.csrf,
+  });
+
+  let score = state.score;
+  let scores = [];
+
+  if (resultResp.code === 0) {
+    score = resultResp.data.score;
+    scores = resultResp.data.scores || [];
+  }
+
+  const scoreEl = document.getElementById('finalScore');
+  scoreEl.textContent = score;
+
+  const msgEl = document.getElementById('finalMsg');
+  if (score >= 60) {
+    msgEl.textContent = '恭喜你通过了答题！';
+  } else {
+    msgEl.textContent = '运气稍微有点差，未能通过答题';
+  }
+
+  const detail = document.getElementById('resultDetail');
+  detail.innerHTML = '<h4>分类得分</h4>';
+  scores.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'item';
+    div.innerHTML = `<span>${escapeHtml(s.category)}</span><span>${s.score}/${s.total}</span>`;
+    detail.appendChild(div);
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function loadSavedAuth() {
+  try {
+    const auth = JSON.parse(localStorage.getItem('bili_hc_auth') || 'null');
+    if (!auth) return false;
+    if (Date.now() - auth.savedAt > 7 * 24 * 3600 * 1000) {
+      localStorage.removeItem('bili_hc_auth');
+      return false;
+    }
+    state.accessToken = auth.accessToken;
+    state.csrf = auth.csrf;
+    state.mid = auth.mid;
+    state.cookie = auth.cookie;
+    return true;
+  } catch(e) { return false; }
+}
+
+function logout() {
+  localStorage.removeItem('bili_hc_auth');
+  state.accessToken = '';
+  state.csrf = '';
+  state.mid = '';
+  state.cookie = '';
+  location.reload();
+}
+
+loadConfig();
