@@ -220,6 +220,22 @@
     .text-center { text-align: center; }
     .flex-between { display: flex; justify-content: space-between; align-items: center; }
 
+    /* Toast */
+    .toast {
+      display: none;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      line-height: 1.5;
+      border: 1px solid;
+    }
+    .toast-error {
+      background: var(--snow);
+      color: var(--black);
+      border-color: var(--mid-gray);
+    }
+
     /* QR Area */
     .qr-area {
       text-align: center;
@@ -464,6 +480,7 @@
       <div class="section-head">
         <h2>选择 AI 模型</h2>
       </div>
+      <div class="toast toast-error" id="toast0"></div>
       <div class="form-group">
         <label>模型提供商</label>
         <select id="provider" onchange="onProviderChange()">
@@ -503,6 +520,7 @@
           <span class="link" onclick="goBack(0)">返回上一步</span>
         </div>
       </div>
+      <div class="toast toast-error" id="toast1"></div>
       <div id="loggedInView" style="display:none;">
         <div class="text-center" style="padding:32px 0;">
           <p class="logged-status">已登录</p>
@@ -533,6 +551,7 @@
           <span class="link" onclick="logout()">退出登录</span>
         </div>
       </div>
+      <div class="toast toast-error" id="toast2"></div>
       <p class="muted mb-16">最多可选择 3 个分类</p>
       <div class="category-list" id="categoryList"></div>
       <div class="captcha-area" id="captchaArea" style="display:none;">
@@ -631,6 +650,7 @@
         if (i < n) el.classList.add('done');
         if (i === n) el.classList.add('active');
       });
+      [0,1,2,3,4].forEach(i => clearToast(i));
       state.step = n;
     }
 
@@ -651,7 +671,7 @@
         : document.getElementById('modelName').value.trim();
 
       if (!state.apiKey) {
-        alert('请输入 API Key');
+        showToast(0, '请输入 API Key');
         return;
       }
 
@@ -716,6 +736,20 @@
         }
         onProviderChange();
       } catch(e) {}
+    }
+
+    function showToast(stepNum, msg) {
+      const el = document.getElementById('toast' + stepNum);
+      if (!el) return;
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => { el.style.display = 'none'; }, 6000);
+    }
+
+    function clearToast(stepNum) {
+      const el = document.getElementById('toast' + stepNum);
+      if (el) el.style.display = 'none';
     }
 
     function addLog(areaId, msg, type = 'info') {
@@ -843,12 +877,12 @@
           state.categories = resp.data.categories || [];
           renderCategories();
         } else if (resp.code === 41099) {
-          alert('获取分类失败：可能已达到每日答题限制（B站每日限3次），请前往B站APP确认');
+          showToast(2, '获取分类失败：可能已达到每日答题限制（B站每日限3次），请前往B站APP确认');
         } else {
-          alert('获取分类失败: ' + JSON.stringify(resp));
+          showToast(2, '获取分类失败: ' + JSON.stringify(resp));
         }
       } catch (e) {
-        alert('获取分类失败: ' + e.message);
+        showToast(2, '获取分类失败: ' + e.message);
       }
     }
 
@@ -868,7 +902,7 @@
             ids.splice(ids.indexOf(div.dataset.id), 1);
           } else {
             if (ids.length >= 3) {
-              alert('最多只能选择3个分类');
+              showToast(2, '最多只能选择3个分类');
               return;
             }
             div.classList.add('selected');
@@ -883,7 +917,7 @@
 
     async function submitCaptcha() {
       if (state.selectedCategories.length === 0) {
-        alert('请选择至少一个分类');
+        showToast(2, '请选择至少一个分类');
         return;
       }
 
@@ -910,14 +944,14 @@
           document.getElementById('startQuizBtn').textContent = '提交验证码并开始答题';
           return;
         } else {
-          alert('获取验证码失败: ' + JSON.stringify(captchaResp));
+          showToast(2, '获取验证码失败: ' + JSON.stringify(captchaResp));
           return;
         }
       }
 
       const code = document.getElementById('captchaInput').value.trim();
       if (!code) {
-        alert('请输入验证码');
+        showToast(2, '请输入验证码');
         return;
       }
 
@@ -932,7 +966,7 @@
       if (resp.code === 0) {
         startQuiz();
       } else {
-        alert('验证码提交失败: ' + JSON.stringify(resp));
+        showToast(2, '验证码提交失败: ' + JSON.stringify(resp));
       }
     }
 
