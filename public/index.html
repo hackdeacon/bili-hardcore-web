@@ -489,9 +489,7 @@
       </div>
       <div class="form-group">
         <label>API Key</label>
-        <input type="text" style="display:none" aria-hidden="true">
-        <input type="password" style="display:none" aria-hidden="true">
-        <input type="password" id="apiKey" placeholder="输入你的 API Key" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')">
+        <input type="text" id="apiKey" placeholder="输入你的 API Key" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')" style="-webkit-text-security:disc;">
       </div>
       <p class="muted mb-16">本工具仅在本地调用 API，不会上传你的登录信息和 API Key。</p>
       <button class="btn btn-black btn-block" onclick="saveConfig()">下一步 - 登录</button>
