@@ -22,6 +22,34 @@
       --btn-text: #404040;
       --border-light: #d4d4d4;
       --focus-ring: rgba(59, 130, 246, 0.5);
+      --error: #dc2626;
+      --error-border: #fca5a5;
+      color-scheme: light dark;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --black: #ffffff;
+        --near-black: #e5e5e5;
+        --darkest: #fafafa;
+        --white: #0a0a0a;
+        --snow: #171717;
+        --light-gray: #262626;
+        --stone: #a3a3a3;
+        --mid-gray: #d4d4d4;
+        --silver: #737373;
+        --btn-text: #d4d4d4;
+        --border-light: #2e2e2e;
+        --focus-ring: rgba(96, 165, 250, 0.4);
+        --error: #f87171;
+        --error-border: #7f1d1d;
+      }
+
+      select {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' fill='none' stroke='%23a3a3a3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      }
+
+      .qr-area svg { filter: invert(1); }
     }
 
     body {
@@ -232,8 +260,8 @@
     }
     .toast-error {
       background: var(--snow);
-      color: #dc2626;
-      border-color: #fca5a5;
+      color: var(--error);
+      border-color: var(--error-border);
     }
 
     /* QR Area */
@@ -241,7 +269,7 @@
       text-align: center;
       padding: 32px 0;
     }
-    .qr-area svg { border-radius: 12px; }
+    .qr-area svg { border-radius: 12px; background: var(--white); padding: 12px; }
     .qr-area .hint {
       margin-top: 16px;
       font-size: 14px;
