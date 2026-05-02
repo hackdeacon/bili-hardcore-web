@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bilibili Hardcore</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, ui-monospace, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      width: 100%;
+      max-width: 560px;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #00a1d6, #0088cc);
+      color: white;
+      padding: 24px;
+      text-align: center;
+    }
+    .header h1 { font-size: 22px; margin-bottom: 4px; }
+    .header p { font-size: 13px; opacity: 0.85; }
+    .content { padding: 28px; }
+
+    .step { display: none; }
+    .step.active { display: block; }
+
+    .step-indicator {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .step-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ddd;
+      transition: all 0.3s;
+      cursor: pointer;
+    }
+    .step-dot.active { background: #00a1d6; transform: scale(1.2); }
+    .step-dot.done { background: #52c41a; }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 6px;
+    }
+    select, input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d9d9d9;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    select:focus, input:focus { border-color: #00a1d6; }
+
+    .form-group { margin-bottom: 16px; }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #00a1d6;
+      color: white;
+    }
+    .btn-primary:hover { background: #0088cc; }
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .btn-success {
+      background: #52c41a;
+      color: white;
+    }
+    .btn-success:hover { background: #45a817; }
+    .btn-danger {
+      background: #ff4d4f;
+      color: white;
+    }
+    .btn-block { width: 100%; text-align: center; }
+
+    .qr-area {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .qr-area canvas { border-radius: 8px; }
+    .qr-area svg { border-radius: 8px; }
+    .qr-area .hint {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    .category-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .category-item {
+      padding: 10px;
+      border: 2px solid #e8e8e8;
+      border-radius: 8px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+    .category-item:hover { border-color: #00a1d6; background: #f0faff; }
+    .category-item.selected {
+      border-color: #00a1d6;
+      background: #e6f7ff;
+      font-weight: 600;
+    }
+
+    .captcha-area {
+      text-align: center;
+      padding: 16px 0;
+    }
+    .captcha-area img {
+      max-width: 280px;
+      border-radius: 8px;
+      border: 1px solid #eee;
+      cursor: pointer;
+    }
+
+    .quiz-area {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .question-card {
+      background: #fafafa;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+      border-left: 4px solid #00a1d6;
+    }
+    .question-card.correct { border-left-color: #52c41a; background: #f6ffed; }
+    .question-card.wrong { border-left-color: #ff4d4f; background: #fff2f0; }
+
+    .question-num {
+      font-size: 12px;
+      color: #00a1d6;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .question-text {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 8px;
+      line-height: 1.5;
+    }
+    .question-answer {
+      font-size: 13px;
+      color: #666;
+    }
+    .question-answer .ai { color: #722ed1; font-weight: 600; }
+    .question-answer .result { margin-left: 8px; }
+
+    .progress-bar {
+      height: 6px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00a1d6, #52c41a);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      text-align: center;
+      padding: 12px 0;
+      border-top: 1px solid #f0f0f0;
+      margin-top: 12px;
+    }
+    .stat-item .num { font-size: 24px; font-weight: 700; color: #00a1d6; }
+    .stat-item .label { font-size: 12px; color: #888; margin-top: 2px; }
+
+    .result-card {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .result-card .score {
+      font-size: 56px;
+      font-weight: 800;
+      color: #00a1d6;
+    }
+    .result-card .score.pass { color: #52c41a; }
+    .result-card .score.fail { color: #ff4d4f; }
+    .result-card .msg { font-size: 16px; color: #333; margin-top: 8px; }
+    .result-detail { margin-top: 16px; text-align: left; }
+    .result-detail .item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+
+    .log-area {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 8px;
+      padding: 12px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 12px;
+      max-height: 160px;
+      overflow-y: auto;
+      margin-top: 12px;
+      line-height: 1.6;
+    }
+    .log-area .log-info { color: #4fc1ff; }
+    .log-area .log-success { color: #6a9955; }
+    .log-area .log-error { color: #f44747; }
+    .log-area .log-warn { color: #cca700; }
+
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #00a1d6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .link { color: #00a1d6; cursor: pointer; text-decoration: underline; }
+    .muted { color: #999; font-size: 12px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mb-8 { margin-bottom: 8px; }
+    .text-center { text-align: center; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Bilibili Hardcore Web</h1>
+      <p>B 站硬核会员自动答题工具</p>
+    </div>
+    <div class="content">
+      <!-- Step Indicator -->
+      <div class="step-indicator" id="stepIndicator">
+        <div class="step-dot active" data-step="0" onclick="goToStep(0)"></div>
+        <div class="step-dot" data-step="1" onclick="goToStep(1)"></div>
+        <div class="step-dot" data-step="2" onclick="goToStep(2)"></div>
+        <div class="step-dot" data-step="3" onclick="goToStep(3)"></div>
+        <div class="step-dot" data-step="4" onclick="goToStep(4)"></div>
+      </div>
+
+      <!-- Step 0: Model Config -->
+      <div class="step active" id="step0">
+        <h3 style="margin-bottom:16px;font-size:16px;">选择 AI 模型</h3>
+        <div class="form-group">
+          <label>模型提供商</label>
+          <select id="provider" onchange="onProviderChange()">
+            <option value="deepseek">DeepSeek (推荐)</option>
+            <option value="gemini">Gemini</option>
+            <option value="openai">OpenAI 兼容 API</option>
+          </select>
+        </div>
+        <div class="form-group" id="baseUrlGroup" style="display:none;">
+          <label>API Base URL</label>
+          <input type="text" id="baseUrl" placeholder="https://api.deepseek.com/v1" autocomplete="off">
+        </div>
+        <div class="form-group" id="modelSelectGroup" style="display:none;">
+          <label>模型名称</label>
+          <select id="modelSelect">
+            <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+            <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+          </select>
+        </div>
+        <div class="form-group" id="modelGroup" style="display:none;">
+          <label>模型名称</label>
+          <input type="text" id="modelName" placeholder="gemini-2.5-flash" autocomplete="off" readonly onfocus="this.removeAttribute('readonly')">
+        </div>
+        <div class="form-group">
+          <label>API Key</label>
+          <!-- dummy fields to prevent browser autofill prompt -->
+          <input type="text" style="display:none" aria-hidden="true">
+          <input type="password" style="display:none" aria-hidden="true">
+          <input type="password" id="apiKey" placeholder="输入你的 API Key" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly')">
+        </div>
+        <p class="muted mb-8">本工具仅在本地调用 API，不会上传你的登录信息和 API Key。</p>
+        <button class="btn btn-primary btn-block" onclick="saveConfig()">下一步 - 登录</button>
+      </div>
+
+      <!-- Step 1: QR Login -->
+      <div class="step" id="step1">
+        <div class="flex-between mb-8">
+          <h3 style="font-size:16px;">登录 B站</h3>
+          <span class="link" style="font-size:12px;" onclick="goBack(0)">返回上一步</span>
+        </div>
+        <div id="loggedInView" style="display:none;">
+          <div class="text-center" style="padding:30px 0;">
+            <p style="font-size:15px;color:#52c41a;margin-bottom:8px;">已登录</p>
+            <p class="muted mb-8" id="loggedUserInfo"></p>
+            <button class="btn btn-primary" onclick="enterOrResume()" style="margin-right:8px;">继续答题</button>
+            <button class="btn btn-danger" onclick="reLogin()">重新扫码登录</button>
+          </div>
+        </div>
+        <div id="qrView">
+          <div class="qr-area" id="qrArea">
+            <div class="spinner"></div> 正在获取二维码...
+          </div>
+          <div class="text-center mt-12">
+            <button class="btn btn-primary" onclick="refreshQR()" id="refreshBtn" style="display:none;">刷新二维码</button>
+          </div>
+        </div>
+        <div class="log-area" id="loginLog"></div>
+      </div>
+
+      <!-- Step 2: Category & Captcha -->
+      <div class="step" id="step2">
+        <div class="flex-between mb-8">
+          <h3 style="font-size:16px;">选择答题分类</h3>
+          <div>
+            <span class="link" style="font-size:12px;margin-right:12px;" onclick="goBack(0)">修改配置</span>
+            <span class="link" style="font-size:12px;" onclick="logout()">退出登录</span>
+          </div>
+        </div>
+        <p class="muted mb-8">最多可选择 3 个分类</p>
+        <div class="category-list" id="categoryList"></div>
+        <div class="captcha-area" id="captchaArea" style="display:none;">
+          <label>请输入验证码</label>
+          <p class="muted mb-8">请查看下方验证码图片，多刷新几次后再填写</p>
+          <img id="captchaImg" src="" alt="验证码" onclick="this.src=this.src.split('?')[0]+'?t='+Date.now()" title="点击刷新验证码">
+          <div class="form-group mt-12">
+            <input type="text" id="captchaInput" placeholder="输入验证码" autocomplete="off">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" id="startQuizBtn" onclick="submitCaptcha()" disabled>开始答题</button>
+      </div>
+
+      <!-- Step 3: Quiz -->
+      <div class="step" id="step3">
+        <div class="flex-between mb-8">
+          <h3 style="font-size:16px;" id="quizTitle">准备答题</h3>
+          <div>
+            <span id="quizStatus" class="muted" style="margin-right:12px;"></span>
+            <span class="link" style="font-size:12px;" onclick="goBack(2)">返回选分类</span>
+          </div>
+        </div>
+        <div id="quizReady" class="text-center" style="padding:40px 0;">
+          <p style="font-size:15px;color:#333;margin-bottom:20px;">已就绪，点击下方按钮开始答题</p>
+          <button class="btn btn-success" onclick="beginQuiz()" style="padding:12px 48px;font-size:16px;">开始答题</button>
+        </div>
+        <div id="quizRunning" style="display:none;">
+        <div class="progress-bar">
+          <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+        </div>
+        <div class="stats" id="quizStats">
+          <div class="stat-item"><div class="num" id="statTotal">0</div><div class="label">已答</div></div>
+          <div class="stat-item"><div class="num" id="statCorrect">0</div><div class="label">正确</div></div>
+          <div class="stat-item"><div class="num" id="statAccuracy">0%</div><div class="label">正确率</div></div>
+        </div>
+        <div class="quiz-area" id="quizArea"></div>
+        <div class="log-area" id="quizLog"></div>
+        </div><!-- /quizRunning -->
+      </div>
+
+      <!-- Step 4: Result -->
+      <div class="step" id="step4">
+        <div class="result-card">
+          <div class="score" id="finalScore">0</div>
+          <div class="msg" id="finalMsg">答题结束</div>
+        </div>
+        <div class="result-detail" id="resultDetail"></div>
+        <div class="text-center mt-16">
+          <button class="btn btn-primary" onclick="goBack(2)" style="margin-right:8px;">重新选分类</button>
+          <button class="btn btn-primary" onclick="logout()">重新配置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      step: 0,
+      provider: 'deepseek',
+      apiKey: '',
+      baseUrl: '',
+      model: '',
+      authCode: '',
+      accessToken: '',
+      csrf: '',
+      mid: '',
+      cookie: '',
+      categories: [],
+      selectedCategories: [],
+      captchaToken: '',
+      questionNum: 0,
+      score: 0,
+      totalAnswered: 0,
+      correctCount: 0,
+      isRunning: false,
+    };
+
+    function goBack(step) {
+      state.isRunning = false;
+      setStep(step);
+      if (step === 2) loadCategories();
+    }
+
+    function goToStep(step) {
+      state.isRunning = false;
+      setStep(step);
+      if (step === 1) initLoginStep();
+      if (step === 2) loadCategories();
+    }
+
+    function setStep(n) {
+      document.querySelectorAll('.step').forEach((el, i) => {
+        el.classList.toggle('active', i === n);
+      });
+      document.querySelectorAll('.step-dot').forEach((el, i) => {
+        el.classList.remove('active', 'done');
+        if (i < n) el.classList.add('done');
+        if (i === n) el.classList.add('active');
+      });
+      state.step = n;
+    }
+
+    function onProviderChange() {
+      const p = document.getElementById('provider').value;
+      state.provider = p;
+      document.getElementById('baseUrlGroup').style.display = p === 'openai' ? 'block' : 'none';
+      document.getElementById('modelSelectGroup').style.display = p === 'deepseek' ? 'block' : 'none';
+      document.getElementById('modelGroup').style.display = p !== 'deepseek' ? 'block' : 'none';
+    }
+
+    function saveConfig() {
+      state.provider = document.getElementById('provider').value;
+      state.apiKey = document.getElementById('apiKey').value.trim();
+      state.baseUrl = document.getElementById('baseUrl').value.trim();
+      state.model = state.provider === 'deepseek'
+        ? document.getElementById('modelSelect').value
+        : document.getElementById('modelName').value.trim();
+
+      if (!state.apiKey) {
+        alert('请输入 API Key');
+        return;
+      }
+
+      // Save to localStorage
+      localStorage.setItem('bili_hc_config', JSON.stringify({
+        provider: state.provider,
+        apiKey: state.apiKey,
+        baseUrl: state.baseUrl,
+        model: state.model,
+      }));
+
+      setStep(1);
+      initLoginStep();
+    }
+
+    async function initLoginStep() {
+      document.getElementById('loginLog').innerHTML = '';
+      if (loadSavedAuth()) {
+        // Already logged in, show logged-in state
+        document.getElementById('qrView').style.display = 'none';
+        document.getElementById('loggedInView').style.display = 'block';
+        document.getElementById('loggedUserInfo').textContent = 'MID: ' + state.mid;
+      } else {
+        // Not logged in, show QR code
+        document.getElementById('qrView').style.display = 'block';
+        document.getElementById('loggedInView').style.display = 'none';
+        initLogin();
+      }
+    }
+
+    function reLogin() {
+      localStorage.removeItem('bili_hc_auth');
+      state.accessToken = '';
+      state.csrf = '';
+      state.mid = '';
+      state.cookie = '';
+      document.getElementById('qrView').style.display = 'block';
+      document.getElementById('loggedInView').style.display = 'none';
+      initLogin();
+    }
+
+    function loadConfig() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('bili_hc_config') || '{}');
+        if (saved.provider) {
+          document.getElementById('provider').value = saved.provider;
+          state.provider = saved.provider;
+        }
+        if (saved.apiKey) {
+          document.getElementById('apiKey').value = saved.apiKey;
+          state.apiKey = saved.apiKey;
+        }
+        if (saved.baseUrl) {
+          document.getElementById('baseUrl').value = saved.baseUrl;
+          state.baseUrl = saved.baseUrl;
+        }
+        if (saved.model) {
+          state.model = saved.model;
+          if (saved.provider === 'deepseek') {
+            const sel = document.getElementById('modelSelect');
+            if ([...sel.options].some(o => o.value === saved.model)) sel.value = saved.model;
+          } else {
+            document.getElementById('modelName').value = saved.model;
+          }
+        }
+        onProviderChange();
+      } catch(e) {}
+    }
+
+    function addLog(areaId, msg, type = 'info') {
+      const area = document.getElementById(areaId);
+      const span = document.createElement('span');
+      span.className = `log-${type}`;
+      span.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      area.appendChild(span);
+      area.appendChild(document.createElement('br'));
+      area.scrollTop = area.scrollHeight;
+    }
+
+    async function apiCall(url, body = {}) {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      return resp.json();
+    }
+
+    async function initLogin() {
+      addLog('loginLog', '正在获取登录二维码...', 'info');
+      const resp = await apiCall('/api/login/qrcode');
+      if (resp.code !== 0) {
+        addLog('loginLog', '获取二维码失败: ' + JSON.stringify(resp), 'error');
+        return;
+      }
+      state.authCode = resp.data.auth_code;
+      const url = resp.data.url;
+
+      document.getElementById('qrArea').innerHTML = '<div id="qrBox"></div><div class="hint">请使用哔哩哔哩 APP 扫描二维码登录</div>';
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      document.getElementById('qrBox').innerHTML = qr.createSvgTag(5, 0);
+
+      addLog('loginLog', '二维码已生成，请扫码登录', 'success');
+      pollLogin();
+    }
+
+    async function pollLogin() {
+      let retries = 0;
+      const maxRetries = 120;
+
+      while (retries < maxRetries) {
+        try {
+          const resp = await apiCall('/api/login/poll', { auth_code: state.authCode });
+          if (resp.code === 0) {
+            const data = resp.data;
+            state.accessToken = data.access_token;
+            state.mid = String(data.mid);
+            const cookies = data.cookie_info.cookies;
+            for (const c of cookies) {
+              if (c.name === 'bili_jct') state.csrf = c.value;
+            }
+            state.cookie = cookies.map(c => `${c.name}=${c.value}`).join(';');
+
+            // Save auth to localStorage
+            localStorage.setItem('bili_hc_auth', JSON.stringify({
+              accessToken: state.accessToken,
+              csrf: state.csrf,
+              mid: state.mid,
+              cookie: state.cookie,
+              savedAt: Date.now(),
+            }));
+
+            addLog('loginLog', '登录成功！用户 MID: ' + state.mid, 'success');
+
+            // Verify user level
+            const userInfo = await apiCall('/api/user/info', { access_key: state.accessToken });
+            if (userInfo.code === 0 && userInfo.data.level < 6) {
+              addLog('loginLog', '警告：当前用户未满6级，可能无法参与答题', 'warn');
+            } else if (userInfo.code === 0) {
+              addLog('loginLog', `用户等级: Lv.${userInfo.data.level}`, 'success');
+            }
+
+            setTimeout(() => enterOrResume(), 800);
+            return;
+          }
+        } catch (e) {
+          addLog('loginLog', '轮询出错: ' + e.message, 'error');
+        }
+        await new Promise(r => setTimeout(r, 2000));
+        retries++;
+      }
+
+      addLog('loginLog', '二维码已过期', 'error');
+      document.getElementById('refreshBtn').style.display = 'inline-block';
+    }
+
+    function refreshQR() {
+      document.getElementById('refreshBtn').style.display = 'none';
+      document.getElementById('loginLog').innerHTML = '';
+      initLogin();
+    }
+
+    async function checkQuizInProgress() {
+      try {
+        const resp = await apiCall('/api/quiz/question', {
+          access_key: state.accessToken,
+          csrf: state.csrf,
+        });
+        if (resp.code === 0 && resp.data && resp.data.question) {
+          return true;
+        }
+      } catch(e) {}
+      return false;
+    }
+
+    async function enterOrResume() {
+      if (await checkQuizInProgress()) {
+        // Quiz already in progress, skip category/captcha
+        startQuiz();
+      } else {
+        setStep(2);
+        loadCategories();
+      }
+    }
+
+    async function loadCategories() {
+      try {
+        const resp = await apiCall('/api/quiz/categories', {
+          access_key: state.accessToken,
+          csrf: state.csrf,
+        });
+        if (resp.code === 0) {
+          state.categories = resp.data.categories || [];
+          renderCategories();
+        } else if (resp.code === 41099) {
+          alert('获取分类失败：可能已达到每日答题限制（B站每日限3次），请前往B站APP确认');
+        } else {
+          alert('获取分类失败: ' + JSON.stringify(resp));
+        }
+      } catch (e) {
+        alert('获取分类失败: ' + e.message);
+      }
+    }
+
+    function renderCategories() {
+      const list = document.getElementById('categoryList');
+      list.innerHTML = '';
+      state.categories.forEach(cat => {
+        const div = document.createElement('div');
+        div.className = 'category-item';
+        div.textContent = cat.name;
+        div.dataset.id = cat.id;
+        div.onclick = () => {
+          const ids = [];
+          list.querySelectorAll('.selected').forEach(el => ids.push(el.dataset.id));
+          if (div.classList.contains('selected')) {
+            div.classList.remove('selected');
+            ids.splice(ids.indexOf(div.dataset.id), 1);
+          } else {
+            if (ids.length >= 3) {
+              alert('最多只能选择3个分类');
+              return;
+            }
+            div.classList.add('selected');
+            ids.push(div.dataset.id);
+          }
+          state.selectedCategories = ids;
+          document.getElementById('startQuizBtn').disabled = ids.length === 0;
+        };
+        list.appendChild(div);
+      });
+    }
+
+    async function submitCaptcha() {
+      if (state.selectedCategories.length === 0) {
+        alert('请选择至少一个分类');
+        return;
+      }
+
+      // Check if captcha is needed
+      if (!document.getElementById('captchaArea').style.display || document.getElementById('captchaArea').style.display === 'none') {
+        // First, try to get question to see if captcha is needed
+        const testResp = await apiCall('/api/quiz/question', {
+          access_key: state.accessToken,
+          csrf: state.csrf,
+        });
+
+        if (testResp.code === 0) {
+          // No captcha needed, go directly to quiz
+          startQuiz();
+          return;
+        }
+
+        // Need captcha
+        const captchaResp = await apiCall('/api/quiz/captcha', {
+          access_key: state.accessToken,
+          csrf: state.csrf,
+        });
+
+        if (captchaResp.code === 0) {
+          state.captchaToken = captchaResp.data.token;
+          document.getElementById('captchaImg').src = captchaResp.data.url;
+          document.getElementById('captchaArea').style.display = 'block';
+          document.getElementById('startQuizBtn').textContent = '提交验证码并开始答题';
+          return;
+        } else {
+          alert('获取验证码失败: ' + JSON.stringify(captchaResp));
+          return;
+        }
+      }
+
+      // Submit captcha
+      const code = document.getElementById('captchaInput').value.trim();
+      if (!code) {
+        alert('请输入验证码');
+        return;
+      }
+
+      const resp = await apiCall('/api/quiz/captcha/submit', {
+        access_key: state.accessToken,
+        csrf: state.csrf,
+        code: code,
+        captcha_token: state.captchaToken,
+        ids: state.selectedCategories.join(','),
+      });
+
+      if (resp.code === 0) {
+        startQuiz();
+      } else {
+        alert('验证码提交失败: ' + JSON.stringify(resp));
+      }
+    }
+
+    async function startQuiz() {
+      setStep(3);
+      state.questionNum = 0;
+      state.score = 0;
+      state.totalAnswered = 0;
+      state.correctCount = 0;
+      state.isRunning = false;
+
+      // Show ready state
+      document.getElementById('quizReady').style.display = 'block';
+      document.getElementById('quizRunning').style.display = 'none';
+      document.getElementById('quizTitle').textContent = '准备答题';
+      document.getElementById('quizStatus').textContent = '';
+      document.getElementById('quizArea').innerHTML = '';
+      document.getElementById('quizLog').innerHTML = '';
+      document.getElementById('progressBar').style.width = '0%';
+      document.getElementById('statTotal').textContent = '0';
+      document.getElementById('statCorrect').textContent = '0';
+      document.getElementById('statAccuracy').textContent = '0%';
+    }
+
+    async function beginQuiz() {
+      document.getElementById('quizReady').style.display = 'none';
+      document.getElementById('quizRunning').style.display = 'block';
+      document.getElementById('quizTitle').textContent = '答题中';
+      state.isRunning = true;
+
+      addLog('quizLog', '开始答题！', 'success');
+      await runQuiz();
+    }
+
+    async function runQuiz() {
+      while (state.questionNum < 100 && state.isRunning) {
+        try {
+          // Get question
+          const qResp = await apiCall('/api/quiz/question', {
+            access_key: state.accessToken,
+            csrf: state.csrf,
+          });
+
+          if (qResp.code !== 0) {
+            addLog('quizLog', '获取题目失败: ' + JSON.stringify(qResp), 'error');
+            if (qResp.code === 41099) {
+              addLog('quizLog', '已达到每日答题限制', 'error');
+            }
+            break;
+          }
+
+          const data = qResp.data;
+          state.questionNum = data.question_num;
+          const question = data.question;
+          const answers = data.answers;
+          const qId = data.id;
+
+          addLog('quizLog', `第${state.questionNum}题: ${question.substring(0, 60)}...`, 'info');
+
+          // Ask AI
+          let aiAnswer = '';
+          let retries = 0;
+          const maxRetries = 3;
+
+          while (retries < maxRetries) {
+            try {
+              const questionStr = `题目: ${question}\n选项: ${JSON.stringify(answers.map((a, i) => `${i+1}. ${a.ans_text}`))}`;
+              const llmResp = await apiCall('/api/llm/ask', {
+                provider: state.provider,
+                apiKey: state.apiKey,
+                baseUrl: state.baseUrl,
+                model: state.model,
+                question: questionStr,
+              });
+              if (llmResp.error) {
+                throw new Error(llmResp.error);
+              }
+              aiAnswer = llmResp.answer;
+              break;
+            } catch (e) {
+              retries++;
+              addLog('quizLog', `AI 回答失败，重试 ${retries}/${maxRetries}: ${e.message}`, 'warn');
+              await new Promise(r => setTimeout(r, 2000 * retries));
+            }
+          }
+
+          if (!aiAnswer) {
+            addLog('quizLog', 'AI 无法回答此题，请检查 API 配置后刷新页面重试', 'error');
+            state.isRunning = false;
+            break;
+          }
+
+          // Parse answer
+          let answerIdx = parseAnswer(aiAnswer, answers.length);
+          if (answerIdx === null) {
+            addLog('quizLog', `AI 回复了无法解析的内容: ${aiAnswer}，重试...`, 'warn');
+            continue;
+          }
+
+          const selectedAnswer = answers[answerIdx - 1];
+          addLog('quizLog', `AI 选择: ${answerIdx}. ${selectedAnswer.ans_text}`, 'info');
+
+          // Submit answer
+          const submitResp = await apiCall('/api/quiz/answer', {
+            access_key: state.accessToken,
+            csrf: state.csrf,
+            id: qId,
+            ans_hash: selectedAnswer.ans_hash,
+            ans_text: selectedAnswer.ans_text,
+          });
+
+          if (submitResp.code !== 0) {
+            addLog('quizLog', '提交答案失败: ' + JSON.stringify(submitResp), 'error');
+            if (submitResp.code === 41103) {
+              addLog('quizLog', '可能已经是硬核会员了，或答题已结束', 'error');
+            }
+            break;
+          }
+
+          // Get score
+          const resultResp = await apiCall('/api/quiz/result', {
+            access_key: state.accessToken,
+            csrf: state.csrf,
+          });
+
+          let isCorrect = false;
+          if (resultResp.code === 0) {
+            const newScore = resultResp.data.score;
+            isCorrect = newScore > state.score;
+            state.score = newScore;
+          }
+
+          state.totalAnswered++;
+          if (isCorrect) state.correctCount++;
+
+          // Update UI
+          updateQuizUI(question, selectedAnswer.ans_text, answerIdx, isCorrect);
+
+          // Small delay between questions
+          await new Promise(r => setTimeout(r, 500));
+
+        } catch (e) {
+          addLog('quizLog', '答题过程出错: ' + e.message, 'error');
+          await new Promise(r => setTimeout(r, 3000));
+        }
+      }
+
+      // Quiz finished
+      state.isRunning = false;
+      addLog('quizLog', '答题结束！', 'success');
+      await showResult();
+    }
+
+    function parseAnswer(text, maxOptions) {
+      // Try to extract a number
+      const num = parseInt(text);
+      if (!isNaN(num) && num >= 1 && num <= maxOptions) return num;
+
+      // Try pattern: 回答: N
+      const match = text.match(/回答[:：]\s*(\d+)/);
+      if (match) {
+        const n = parseInt(match[1]);
+        if (n >= 1 && n <= maxOptions) return n;
+      }
+
+      // Try any number in the text
+      const anyNum = text.match(/\d+/);
+      if (anyNum) {
+        const n = parseInt(anyNum[0]);
+        if (n >= 1 && n <= maxOptions) return n;
+      }
+
+      return null;
+    }
+
+    function updateQuizUI(question, answerText, answerIdx, isCorrect) {
+      const area = document.getElementById('quizArea');
+      const card = document.createElement('div');
+      card.className = `question-card ${isCorrect ? 'correct' : 'wrong'}`;
+      card.innerHTML = `
+        <div class="question-num">第 ${state.questionNum} 题</div>
+        <div class="question-text">${escapeHtml(question)}</div>
+        <div class="question-answer">
+          <span class="ai">AI选择: ${answerIdx}. ${escapeHtml(answerText)}</span>
+          <span class="result">${isCorrect ? '✓ 正确' : '✗ 错误'}</span>
+        </div>
+      `;
+      area.appendChild(card);
+      area.scrollTop = area.scrollHeight;
+
+      // Update stats
+      document.getElementById('statTotal').textContent = state.totalAnswered;
+      document.getElementById('statCorrect').textContent = state.correctCount;
+      const accuracy = state.totalAnswered > 0 ? Math.round(state.correctCount / state.totalAnswered * 100) : 0;
+      document.getElementById('statAccuracy').textContent = accuracy + '%';
+      document.getElementById('progressBar').style.width = (state.questionNum) + '%';
+      document.getElementById('quizStatus').textContent = `${state.questionNum}/100`;
+    }
+
+    async function showResult() {
+      setStep(4);
+
+      const resultResp = await apiCall('/api/quiz/result', {
+        access_key: state.accessToken,
+        csrf: state.csrf,
+      });
+
+      let score = state.score;
+      let scores = [];
+
+      if (resultResp.code === 0) {
+        score = resultResp.data.score;
+        scores = resultResp.data.scores || [];
+      }
+
+      const scoreEl = document.getElementById('finalScore');
+      scoreEl.textContent = score;
+      scoreEl.className = `score ${score >= 60 ? 'pass' : 'fail'}`;
+
+      const msgEl = document.getElementById('finalMsg');
+      if (score >= 60) {
+        msgEl.textContent = '恭喜你通过了答题！🎉';
+        msgEl.style.color = '#52c41a';
+      } else {
+        msgEl.textContent = '运气稍微有点差，未能通过答题';
+        msgEl.style.color = '#ff4d4f';
+      }
+
+      const detail = document.getElementById('resultDetail');
+      detail.innerHTML = '<h4 style="margin-bottom:8px;">分类得分</h4>';
+      scores.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<span>${escapeHtml(s.category)}</span><span>${s.score}/${s.total}</span>`;
+        detail.appendChild(div);
+      });
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function loadSavedAuth() {
+      try {
+        const auth = JSON.parse(localStorage.getItem('bili_hc_auth') || 'null');
+        if (!auth) return false;
+        // 7 day expiry
+        if (Date.now() - auth.savedAt > 7 * 24 * 3600 * 1000) {
+          localStorage.removeItem('bili_hc_auth');
+          return false;
+        }
+        state.accessToken = auth.accessToken;
+        state.csrf = auth.csrf;
+        state.mid = auth.mid;
+        state.cookie = auth.cookie;
+        return true;
+      } catch(e) { return false; }
+    }
+
+    function logout() {
+      localStorage.removeItem('bili_hc_auth');
+      state.accessToken = '';
+      state.csrf = '';
+      state.mid = '';
+      state.cookie = '';
+      location.reload();
+    }
+
+    // Init
+    loadConfig();
+  </script>
+</body>
+</html>
